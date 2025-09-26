@@ -1,0 +1,31 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+*/
+import React from 'react';
+
+interface FooterProps {
+  isOnDressingScreen?: boolean;
+}
+
+const Footer: React.FC<FooterProps> = ({ isOnDressingScreen = false }) => {
+  return (
+    <footer className={`fixed bottom-0 left-0 right-0 bg-brand-light/80 backdrop-blur-md border-t border-brand-dark/10 p-3 z-50 ${isOnDressingScreen ? 'hidden sm:block' : ''}`}>
+      <div className="mx-auto flex items-center justify-center text-xs text-brand-dark/80 max-w-7xl px-4">
+        <p>
+          Created by{' '}
+          <a 
+            href="https://x.com/wonderwithg" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="font-semibold text-brand-blue hover:underline"
+          >
+            @aiforpinoys
+          </a>
+        </p>
+      </div>
+    </footer>
+  );
+};
+
+export default Footer;
