@@ -8,13 +8,13 @@ import { WardrobeItem } from './types';
 // Default wardrobe items hosted for easy access
 export const defaultWardrobe: WardrobeItem[] = [
   {
-    id: 'gemini-sweat',
-    name: 'Gemini Sweat',
-    url: 'https://raw.githubusercontent.com/ammaarreshi/app-images/refs/heads/main/gemini-sweat-2.png',
+    id: 'aiforpinoys-hoodie',
+    name: 'AI for Pinoys Hoodie',
+    url: 'https://res.cloudinary.com/dbylka4xx/image/upload/v1762404277/AiForPinoys_Hoodie_jodevx.png',
   },
   {
-    id: 'gemini-tee',
-    name: 'Gemini Tee',
-    url: 'https://raw.githubusercontent.com/ammaarreshi/app-images/refs/heads/main/Gemini-tee.png',
+    id: 'aiforpinoys-tee',
+    name: 'AI for Pinoys Tee',
+    url: 'https://res.cloudinary.com/dbylka4xx/image/upload/v1762404168/AiForPinoys_Tee_adcejp.png',
   }
 ];

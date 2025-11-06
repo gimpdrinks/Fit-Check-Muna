@@ -152,8 +152,7 @@ const App: React.FC = () => {
         return [...prev, garmentInfo];
       });
     } catch (err) {
-      // Fix: Pass `err` directly to `getFriendlyErrorMessage` to allow for proper error handling, 
-      // instead of converting it to a string beforehand.
+      // FIX: The error type is 'unknown'. Pass it directly to the error handler for better inspection.
       const errorMessage = getFriendlyErrorMessage(err, 'Failed to apply garment');
       if (String(err).includes(LIMIT_EXCEEDED_ERROR_MESSAGE)) {
           updateUsage();
@@ -204,7 +203,7 @@ const App: React.FC = () => {
         return newHistory;
       });
     } catch (err) {
-      // Fix: Pass `err` directly to `getFriendlyErrorMessage` to allow for proper error handling.
+      // FIX: The error type is 'unknown'. Pass it directly to the error handler for better inspection.
       const errorMessage = getFriendlyErrorMessage(err, 'Failed to change pose');
       if (String(err).includes(LIMIT_EXCEEDED_ERROR_MESSAGE)) {
           updateUsage();

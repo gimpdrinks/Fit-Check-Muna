@@ -44,7 +44,7 @@ export function getFriendlyErrorMessage(error: unknown, context: string): string
 }
 
 // --- Rate Limiter ---
-const USAGE_LIMIT = 15;
+const USAGE_LIMIT = 10;
 const STORAGE_KEY = 'gemini-vto-usage';
 export const LIMIT_EXCEEDED_ERROR_MESSAGE = 'Daily generation limit reached.';
 
