@@ -15,7 +15,7 @@ const Footer: React.FC<FooterProps> = ({ isOnDressingScreen = false }) => {
         <p>
           Created by{' '}
           <a 
-            href="https://x.com/wonderwithg" 
+            href="https://aiforpinoys.com/" 
             target="_blank" 
             rel="noopener noreferrer"
             className="font-semibold text-brand-blue hover:underline"

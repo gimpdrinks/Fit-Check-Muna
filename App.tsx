@@ -14,7 +14,7 @@ import { OutfitLayer, WardrobeItem } from './types';
 import { ChevronDownIcon, ChevronUpIcon } from './components/icons';
 import { defaultWardrobe } from './wardrobe';
 import Footer from './components/Footer';
-import { getFriendlyErrorMessage } from './lib/utils';
+import { getFriendlyErrorMessage, checkLimit, incrementUsage, LIMIT_EXCEEDED_ERROR_MESSAGE } from './lib/utils';
 import Spinner from './components/Spinner';
 import Header from './components/Header';
 
@@ -34,16 +34,13 @@ const useMediaQuery = (query: string): boolean => {
     const mediaQueryList = window.matchMedia(query);
     const listener = (event: MediaQueryListEvent) => setMatches(event.matches);
 
-    // DEPRECATED: mediaQueryList.addListener(listener);
     mediaQueryList.addEventListener('change', listener);
     
-    // Check again on mount in case it changed between initial state and effect runs
     if (mediaQueryList.matches !== matches) {
       setMatches(mediaQueryList.matches);
     }
 
     return () => {
-      // DEPRECATED: mediaQueryList.removeListener(listener);
       mediaQueryList.removeEventListener('change', listener);
     };
   }, [query, matches]);
@@ -62,7 +59,12 @@ const App: React.FC = () => {
   const [currentPoseIndex, setCurrentPoseIndex] = useState(0);
   const [isSheetCollapsed, setIsSheetCollapsed] = useState(false);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>(defaultWardrobe);
+  const [usageInfo, setUsageInfo] = useState(() => checkLimit());
   const isMobile = useMediaQuery('(max-width: 767px)');
+
+  const updateUsage = useCallback(() => {
+    setUsageInfo(checkLimit());
+  }, []);
 
   const activeOutfitLayers = useMemo(() => 
     outfitHistory.slice(0, currentOutfitIndex + 1), 
@@ -80,8 +82,6 @@ const App: React.FC = () => {
     if (!currentLayer) return modelImageUrl;
 
     const poseInstruction = POSE_INSTRUCTIONS[currentPoseIndex];
-    // Return the image for the current pose, or fallback to the first available image for the current layer.
-    // This ensures an image is shown even while a new pose is generating.
     return currentLayer.poseImages[poseInstruction] ?? Object.values(currentLayer.poseImages)[0];
   }, [outfitHistory, currentOutfitIndex, currentPoseIndex, modelImageUrl]);
 
@@ -92,6 +92,7 @@ const App: React.FC = () => {
   }, [outfitHistory, currentOutfitIndex]);
 
   const handleModelFinalized = (url: string) => {
+    updateUsage();
     setModelImageUrl(url);
     setOutfitHistory([{
       garment: null,
@@ -110,16 +111,16 @@ const App: React.FC = () => {
     setCurrentPoseIndex(0);
     setIsSheetCollapsed(false);
     setWardrobe(defaultWardrobe);
+    updateUsage(); // Refresh usage info in case they start over on a new day
   };
 
   const handleGarmentSelect = useCallback(async (garmentFile: File, garmentInfo: WardrobeItem) => {
-    if (!displayImageUrl || isLoading) return;
+    if (!displayImageUrl || isLoading || usageInfo.isExceeded) return;
 
-    // Caching: Check if we are re-applying a previously generated layer
     const nextLayer = outfitHistory[currentOutfitIndex + 1];
     if (nextLayer && nextLayer.garment?.id === garmentInfo.id) {
         setCurrentOutfitIndex(prev => prev + 1);
-        setCurrentPoseIndex(0); // Reset pose when changing layer
+        setCurrentPoseIndex(0);
         return;
     }
 
@@ -129,6 +130,8 @@ const App: React.FC = () => {
 
     try {
       const newImageUrl = await generateVirtualTryOnImage(displayImageUrl, garmentFile);
+      incrementUsage();
+      updateUsage();
       const currentPoseInstruction = POSE_INSTRUCTIONS[currentPoseIndex];
       
       const newLayer: OutfitLayer = { 
@@ -137,13 +140,11 @@ const App: React.FC = () => {
       };
 
       setOutfitHistory(prevHistory => {
-        // Cut the history at the current point before adding the new layer
         const newHistory = prevHistory.slice(0, currentOutfitIndex + 1);
         return [...newHistory, newLayer];
       });
       setCurrentOutfitIndex(prev => prev + 1);
       
-      // Add to personal wardrobe if it's not already there
       setWardrobe(prev => {
         if (prev.find(item => item.id === garmentInfo.id)) {
             return prev;
@@ -151,47 +152,51 @@ const App: React.FC = () => {
         return [...prev, garmentInfo];
       });
     } catch (err) {
-      setError(getFriendlyErrorMessage(err, 'Failed to apply garment'));
+      // Fix: Pass `err` directly to `getFriendlyErrorMessage` to allow for proper error handling, 
+      // instead of converting it to a string beforehand.
+      const errorMessage = getFriendlyErrorMessage(err, 'Failed to apply garment');
+      if (String(err).includes(LIMIT_EXCEEDED_ERROR_MESSAGE)) {
+          updateUsage();
+      }
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [displayImageUrl, isLoading, currentPoseIndex, outfitHistory, currentOutfitIndex]);
+  }, [displayImageUrl, isLoading, currentPoseIndex, outfitHistory, currentOutfitIndex, usageInfo.isExceeded, updateUsage]);
 
   const handleRemoveLastGarment = () => {
     if (currentOutfitIndex > 0) {
       setCurrentOutfitIndex(prevIndex => prevIndex - 1);
-      setCurrentPoseIndex(0); // Reset pose to default when removing a layer
+      setCurrentPoseIndex(0);
     }
   };
   
   const handlePoseSelect = useCallback(async (newIndex: number) => {
-    if (isLoading || outfitHistory.length === 0 || newIndex === currentPoseIndex) return;
+    if (isLoading || outfitHistory.length === 0 || newIndex === currentPoseIndex || usageInfo.isExceeded) return;
     
     const poseInstruction = POSE_INSTRUCTIONS[newIndex];
     const currentLayer = outfitHistory[currentOutfitIndex];
 
-    // If pose already exists, just update the index to show it.
     if (currentLayer.poseImages[poseInstruction]) {
       setCurrentPoseIndex(newIndex);
       return;
     }
 
-    // Pose doesn't exist, so generate it.
-    // Use an existing image from the current layer as the base.
     const baseImageForPoseChange = Object.values(currentLayer.poseImages)[0];
-    if (!baseImageForPoseChange) return; // Should not happen
+    if (!baseImageForPoseChange) return;
 
     setError(null);
     setIsLoading(true);
     setLoadingMessage(`Changing pose...`);
     
     const prevPoseIndex = currentPoseIndex;
-    // Optimistically update the pose index so the pose name changes in the UI
     setCurrentPoseIndex(newIndex);
 
     try {
       const newImageUrl = await generatePoseVariation(baseImageForPoseChange, poseInstruction);
+      incrementUsage();
+      updateUsage();
       setOutfitHistory(prevHistory => {
         const newHistory = [...prevHistory];
         const updatedLayer = newHistory[currentOutfitIndex];
@@ -199,20 +204,26 @@ const App: React.FC = () => {
         return newHistory;
       });
     } catch (err) {
-      setError(getFriendlyErrorMessage(err, 'Failed to change pose'));
-      // Revert pose index on failure
+      // Fix: Pass `err` directly to `getFriendlyErrorMessage` to allow for proper error handling.
+      const errorMessage = getFriendlyErrorMessage(err, 'Failed to change pose');
+      if (String(err).includes(LIMIT_EXCEEDED_ERROR_MESSAGE)) {
+          updateUsage();
+      }
+      setError(errorMessage);
       setCurrentPoseIndex(prevPoseIndex);
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [currentPoseIndex, outfitHistory, isLoading, currentOutfitIndex]);
+  }, [currentPoseIndex, outfitHistory, isLoading, currentOutfitIndex, usageInfo.isExceeded, updateUsage]);
 
   const viewVariants = {
     initial: { opacity: 0, y: 15 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -15 },
   };
+
+  const isInteractionDisabled = isLoading || usageInfo.isExceeded;
 
   return (
     <div className="font-sans">
@@ -251,6 +262,7 @@ const App: React.FC = () => {
                   poseInstructions={POSE_INSTRUCTIONS}
                   currentPoseIndex={currentPoseIndex}
                   availablePoseKeys={availablePoseKeys}
+                  isInteractionDisabled={isInteractionDisabled}
                 />
               </div>
 
@@ -272,6 +284,12 @@ const App: React.FC = () => {
                         <p>{error}</p>
                       </div>
                     )}
+                     {usageInfo.isExceeded && (
+                      <div className="bg-brand-blue/10 border-l-4 border-brand-blue text-brand-dark p-4 rounded-md" role="status">
+                          <p className="font-bold">Daily Limit Reached</p>
+                          <p className="text-sm">You've used all your generations for today. Please come back tomorrow for more styling!</p>
+                      </div>
+                    )}
                     <OutfitStack 
                       outfitHistory={activeOutfitLayers}
                       onRemoveLastGarment={handleRemoveLastGarment}
@@ -281,7 +299,11 @@ const App: React.FC = () => {
                       activeGarmentIds={activeGarmentIds}
                       isLoading={isLoading}
                       wardrobe={wardrobe}
+                      isDisabled={usageInfo.isExceeded}
                     />
+                    <div className="text-xs font-semibold text-brand-dark/60 text-center -mt-4">
+                      <strong>{usageInfo.remaining}</strong> / {usageInfo.limit} generations left today
+                    </div>
                   </div>
               </aside>
             </main>

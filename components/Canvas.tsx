@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState } from 'react';
-import { RotateCcwIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
+import { RotateCcwIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon } from './icons';
 import Spinner from './Spinner';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -16,13 +16,14 @@ interface CanvasProps {
   poseInstructions: string[];
   currentPoseIndex: number;
   availablePoseKeys: string[];
+  isInteractionDisabled?: boolean;
 }
 
-const Canvas: React.FC<CanvasProps> = ({ displayImageUrl, onStartOver, isLoading, loadingMessage, onSelectPose, poseInstructions, currentPoseIndex, availablePoseKeys }) => {
+const Canvas: React.FC<CanvasProps> = ({ displayImageUrl, onStartOver, isLoading, loadingMessage, onSelectPose, poseInstructions, currentPoseIndex, availablePoseKeys, isInteractionDisabled = false }) => {
   const [isPoseMenuOpen, setIsPoseMenuOpen] = useState(false);
   
   const handlePreviousPose = () => {
-    if (isLoading || availablePoseKeys.length <= 1) return;
+    if (isInteractionDisabled || availablePoseKeys.length <= 1) return;
 
     const currentPoseInstruction = poseInstructions[currentPoseIndex];
     const currentIndexInAvailable = availablePoseKeys.indexOf(currentPoseInstruction);
@@ -43,7 +44,7 @@ const Canvas: React.FC<CanvasProps> = ({ displayImageUrl, onStartOver, isLoading
   };
 
   const handleNextPose = () => {
-    if (isLoading) return;
+    if (isInteractionDisabled) return;
 
     const currentPoseInstruction = poseInstructions[currentPoseIndex];
     const currentIndexInAvailable = availablePoseKeys.indexOf(currentPoseInstruction);
@@ -68,6 +69,16 @@ const Canvas: React.FC<CanvasProps> = ({ displayImageUrl, onStartOver, isLoading
         onSelectPose(newGlobalPoseIndex);
     }
   };
+
+  const handleDownload = () => {
+    if (!displayImageUrl) return;
+    const link = document.createElement('a');
+    link.href = displayImageUrl;
+    link.download = 'fit-check-muna-tayo.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   
   return (
     <div className="w-full h-full flex items-center justify-center p-4 relative animate-zoom-in group">
@@ -79,6 +90,20 @@ const Canvas: React.FC<CanvasProps> = ({ displayImageUrl, onStartOver, isLoading
           <RotateCcwIcon className="w-4 h-4 mr-2" />
           Start Over
       </button>
+
+      {/* Download Button */}
+      {displayImageUrl && !isLoading && (
+        <button
+          onClick={handleDownload}
+          title="Download Image"
+          aria-label="Download Image"
+          className="absolute top-4 right-4 z-30 flex items-center justify-center text-center bg-white/60 border border-brand-dark/20 text-brand-dark font-semibold py-2 px-4 rounded-full transition-all duration-200 ease-in-out hover:bg-white hover:border-brand-dark/40 active:scale-95 text-sm backdrop-blur-sm"
+        >
+          <DownloadIcon className="w-4 h-4 mr-2" />
+          Download
+        </button>
+      )}
+
 
       {/* Image Display or Placeholder */}
       <div className="relative w-full h-full flex items-center justify-center">
@@ -135,7 +160,7 @@ const Canvas: React.FC<CanvasProps> = ({ displayImageUrl, onStartOver, isLoading
                               <button
                                   key={pose}
                                   onClick={() => onSelectPose(index)}
-                                  disabled={isLoading || index === currentPoseIndex}
+                                  disabled={isInteractionDisabled || index === currentPoseIndex}
                                   className="w-full text-left text-sm font-medium text-brand-dark p-2 rounded-md hover:bg-brand-blue/10 disabled:opacity-50 disabled:bg-brand-blue/10 disabled:font-bold disabled:text-brand-blue disabled:cursor-not-allowed"
                               >
                                   {pose}
@@ -151,7 +176,7 @@ const Canvas: React.FC<CanvasProps> = ({ displayImageUrl, onStartOver, isLoading
               onClick={handlePreviousPose}
               aria-label="Previous pose"
               className="p-2 rounded-full hover:bg-white/80 active:scale-90 transition-all disabled:opacity-50"
-              disabled={isLoading}
+              disabled={isInteractionDisabled}
             >
               <ChevronLeftIcon className="w-5 h-5 text-brand-dark" />
             </button>
@@ -162,7 +187,7 @@ const Canvas: React.FC<CanvasProps> = ({ displayImageUrl, onStartOver, isLoading
               onClick={handleNextPose}
               aria-label="Next pose"
               className="p-2 rounded-full hover:bg-white/80 active:scale-90 transition-all disabled:opacity-50"
-              disabled={isLoading}
+              disabled={isInteractionDisabled}
             >
               <ChevronRightIcon className="w-5 h-5 text-brand-dark" />
             </button>

@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloudIcon } from './icons';
 import { Compare } from './ui/compare';
 import { generateModelImage } from '../services/geminiService';
 import Spinner from './Spinner';
-import { getFriendlyErrorMessage } from '../lib/utils';
+import { getFriendlyErrorMessage, checkLimit, incrementUsage, LIMIT_EXCEEDED_ERROR_MESSAGE } from '../lib/utils';
 
 interface StartScreenProps {
   onModelFinalized: (modelUrl: string) => void;
@@ -20,8 +20,21 @@ const StartScreen: React.FC<StartScreenProps> = ({ onModelFinalized }) => {
   const [generatedModelUrl, setGeneratedModelUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usageInfo, setUsageInfo] = useState(() => checkLimit());
+
+  useEffect(() => {
+    // Check limit on component mount
+    setUsageInfo(checkLimit());
+  }, []);
 
   const handleFileSelect = useCallback(async (file: File) => {
+    const currentUsage = checkLimit();
+    setUsageInfo(currentUsage);
+    if (currentUsage.isExceeded) {
+        setError("You've reached the daily generation limit for this demo. Please come back tomorrow!");
+        return;
+    }
+
     if (!file.type.startsWith('image/')) {
         setError('Please select an image file.');
         return;
@@ -36,10 +49,15 @@ const StartScreen: React.FC<StartScreenProps> = ({ onModelFinalized }) => {
         setError(null);
         try {
             const result = await generateModelImage(file);
+            incrementUsage();
             setGeneratedModelUrl(result);
         } catch (err) {
-            setError(getFriendlyErrorMessage(err, 'Failed to create model'));
-            setUserImageUrl(null);
+            const errorMessage = getFriendlyErrorMessage(err, 'Failed to create model');
+            setError(errorMessage);
+            setUserImageUrl(null); // Reset on failure to allow retry if not a limit error
+            if (String(err).includes(LIMIT_EXCEEDED_ERROR_MESSAGE)) {
+                setUsageInfo(checkLimit());
+            }
         } finally {
             setIsGenerating(false);
         }
@@ -58,6 +76,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onModelFinalized }) => {
     setGeneratedModelUrl(null);
     setIsGenerating(false);
     setError(null);
+    setUsageInfo(checkLimit());
   };
 
   const screenVariants = {
@@ -81,20 +100,28 @@ const StartScreen: React.FC<StartScreenProps> = ({ onModelFinalized }) => {
           <div className="lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left">
             <div className="max-w-lg">
               <h1 className="text-5xl md:text-6xl font-serif font-bold text-brand-dark leading-tight">
-                Create Your Model for Any Look.
+                Fit Check Muna Tayo
               </h1>
               <p className="mt-4 text-lg text-brand-dark/70">
                 Ever wondered how an outfit would look on you? Stop guessing. Upload a photo and see for yourself. Our AI creates your personal model, ready to try on anything.
               </p>
               <hr className="my-8 border-brand-dark/10" />
               <div className="flex flex-col items-center lg:items-start w-full gap-3">
-                <label htmlFor="image-upload-start" className="w-full relative flex items-center justify-center px-8 py-3 text-base font-semibold text-white bg-brand-blue rounded-md cursor-pointer group hover:bg-brand-blue/90 transition-colors">
+                <label 
+                  htmlFor="image-upload-start" 
+                  className={`w-full relative flex items-center justify-center px-8 py-3 text-base font-semibold text-white bg-brand-blue rounded-md transition-colors ${usageInfo.isExceeded ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer group hover:bg-brand-blue/90'}`}
+                >
                   <UploadCloudIcon className="w-5 h-5 mr-3" />
                   Upload Photo
                 </label>
-                <input id="image-upload-start" type="file" className="hidden" accept="image/png, image/jpeg, image/webp, image/avif, image/heic, image/heif" onChange={handleFileChange} />
+                <input id="image-upload-start" type="file" className="hidden" accept="image/png, image/jpeg, image/webp, image/avif, image/heic, image/heif" onChange={handleFileChange} disabled={usageInfo.isExceeded} />
                 <p className="text-gray-500 text-sm">Select a clear, full-body photo. Face-only photos also work, but full-body is preferred for best results.</p>
                 <p className="text-gray-500 text-xs mt-1">By uploading, you agree not to create harmful, explicit, or unlawful content. This service is for creative and responsible use only.</p>
+                {usageInfo.isExceeded && !error && (
+                  <p className="text-brand-red font-semibold text-md mt-2">
+                      Daily generation limit reached. Please try again tomorrow.
+                  </p>
+                )}
                 {error && <p className="text-brand-red text-sm mt-2">{error}</p>}
               </div>
             </div>
